@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
@@ -49,7 +50,7 @@ class FeaturesExtractor:
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
         # Initiate arrays
-        training_features = np.empty((0, 4))
+        training_features = np.empty((0, 21))
         training_labels = np.empty((0,))
 
         # Loop over each training cloud
@@ -89,13 +90,8 @@ class FeaturesExtractor:
             # Gather chosen points
             training_points = points[training_inds, :]
 
-            # Compute features for the points of the chosen indices and place them in a [N, 4] matrix
-            vert, line, plan, sphe = compute_features(
-                training_points, points, self.radius
-            )
-            features = np.vstack(
-                (vert.ravel(), line.ravel(), plan.ravel(), sphe.ravel())
-            ).T
+            # Compute features for the points of the chosen indices and place them in a [N, 21] matrix
+            features = compute_features(training_points, points, self.radius)
 
             # Concatenate features / labels of all clouds
             training_features = np.vstack((training_features, features))
@@ -177,7 +173,7 @@ class FeaturesExtractor:
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
         # Initiate arrays
-        test_features = np.empty((0, 4))
+        test_features = np.empty((0, 21))
 
         # Loop over each training cloud
         for i, file in enumerate(ply_files):
@@ -185,7 +181,6 @@ class FeaturesExtractor:
             # Load Training cloud
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
-            print(points.shape)
 
             # Compute features only one time and save them for further use
             #
@@ -203,11 +198,7 @@ class FeaturesExtractor:
 
             # If the file does not exist, compute the features (very long) and save them for future use
             else:
-
-                vert, line, plan, sphe = compute_features(points, points, self.radius)
-                features = np.vstack(
-                    (vert.ravel(), line.ravel(), plan.ravel(), sphe.ravel())
-                ).T
+                features = compute_features(points, points, self.radius)
                 np.save(feature_file, features)
 
             # Concatenate features of several clouds
@@ -219,8 +210,8 @@ class FeaturesExtractor:
 
 if __name__ == "__main__":
     # paths of the training and test files
-    training_path = "../data/MiniChallenge/training"
-    test_path = "../data/MiniChallenge/test"
+    training_path = "../data/training"
+    test_path = "../data/test"
 
     #   For this simple algorithm, we only compute the features for a subset of the training points. We choose N points
     #   per class in each training file. This has two advantages : balancing the class for our classifier and saving a
@@ -249,12 +240,17 @@ if __name__ == "__main__":
     print("Test")
     t0 = time.time()
     predictions = clf.predict(test_features)
-    print(predictions.shape)
     t1 = time.time()
     print("Done in %.3fs\n" % (t1 - t0))
 
+    assert predictions.shape[0] == 3079187, "Incorrect number of predictions"
+
     print("Save predictions")
     t0 = time.time()
-    np.savetxt("MiniDijon9.txt", predictions, fmt="%d")
+    np.savetxt(
+        f"submissions/feat-{datetime.now().strftime('%Y_%m_%d-%H_%M')}.txt",
+        predictions,
+        fmt="%d",
+    )
     t1 = time.time()
     print("Done in %.3fs\n" % (t1 - t0))
