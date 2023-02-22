@@ -19,13 +19,13 @@ class FeaturesExtractor:
         Initiation method called when an object of this class is created. This is where you can define parameters
         """
 
-        # Neighborhood radius
+        # neighborhood radius
         self.radius = 0.5
 
-        # Number of training points per class
+        # number of training points per class
         self.num_per_class = 500
 
-        # Classification labels
+        # classification labels
         self.label_names = {
             0: "Unclassified",
             1: "Ground",
@@ -40,45 +40,39 @@ class FeaturesExtractor:
         """
         This method extract features/labels of a subset of the training points. It ensures a balanced choice between
         classes.
+
         Args:
             path: path where the ply files are located.
         Returns:
             features and labels
         """
 
-        # Get all the ply files in data folder
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
-        # Initiate arrays
         training_features = np.empty((0, 21))
         training_labels = np.empty((0,))
 
-        # Loop over each training cloud
         for i, file in enumerate(ply_files):
 
-            # Load Training cloud
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
             labels = cloud_ply["class"]
 
-            # Initiate training indices array
             training_inds = np.empty(0, dtype=np.int32)
 
-            # Loop over each class to choose training points
             for label, name in self.label_names.items():
 
-                # Do not include class 0 in training
+                # class 0 is excluded from training
                 if label == 0:
                     continue
 
-                # Collect all indices of the current class
                 label_inds = np.where(labels == label)[0]
 
-                # If you have not enough indices, just take all of them
+                # taking all the indices if there is not enough of them
                 if len(label_inds) <= self.num_per_class:
                     training_inds = np.hstack((training_inds, label_inds))
 
-                # If you have more than enough indices, choose randomly
+                # choosing randomly otherwise
                 else:
                     random_choice = np.random.choice(
                         len(label_inds), self.num_per_class, replace=False
@@ -87,19 +81,22 @@ class FeaturesExtractor:
                         (training_inds, label_inds[random_choice])
                     )
 
-            # Gather chosen points
             training_points = points[training_inds, :]
 
-            # Compute features for the points of the chosen indices and place them in a [N, 21] matrix
+            # computing features for the points of the chosen indices and place them in a [N, 21] matrix
             features = compute_features(training_points, points, self.radius)
 
-            # Concatenate features / labels of all clouds
             training_features = np.vstack((training_features, features))
             training_labels = np.hstack((training_labels, labels[training_inds]))
 
         return training_features, training_labels
 
-    def extract_data(self, path: str, test_file: str):
+    def extract_train_and_test(self, path: str, test_file: str = ""):
+        """
+        Extracts and split a dataset into test and train.
+        The splitting cannot be done arbitrarily when using deep learning, the model could over-fit by learning the
+        positions of each group of points of the same label.
+        """
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
         train_features = np.empty((0, 3))
@@ -107,7 +104,6 @@ class FeaturesExtractor:
         test_features = np.empty((0, 3))
         test_labels = np.empty((0,))
 
-        # Loop over each training cloud
         for i, file in enumerate(ply_files):
             print(f"Reading file {file}")
 
@@ -137,6 +133,7 @@ class FeaturesExtractor:
                     )
                     indices = np.hstack((indices, label_inds[random_choice]))
 
+            # one file is designated as the test file
             if file == test_file:
                 test_features = np.vstack((test_features, points[indices, :]))
                 test_labels = np.hstack((test_labels, labels[indices]))
@@ -147,14 +144,11 @@ class FeaturesExtractor:
         return train_features, train_labels, test_features, test_labels
 
     @staticmethod
-    def extract_data_no_label(path):
-        # Get all the ply files in data folder
+    def extract_data_no_label(path: str):
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
-        # Initiate arrays
         features = np.empty((0, 3))
 
-        # Loop over each training cloud
         for i, file in enumerate(ply_files):
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
@@ -162,47 +156,29 @@ class FeaturesExtractor:
 
         return features
 
-    def extract_test(self, path):
+    def extract_test(self, path: str, override_cache: bool = False):
         """
-        This method extract features of all the test points.
-        :param path: path where the ply files are located.
-        :return: features
+        Extracts features of all the test points. Caches the features computed in a npy file.
         """
 
-        # Get all the ply files in data folder
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
-        # Initiate arrays
         test_features = np.empty((0, 21))
 
-        # Loop over each training cloud
         for i, file in enumerate(ply_files):
 
-            # Load Training cloud
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
 
-            # Compute features only one time and save them for further use
-            #
-            #   WARNING : This will save you some time but do not forget to delete your features file if you change
-            #   your features. Otherwise, you will not compute them and use the previous ones
-            #
-
-            # Name the feature file after the ply file.
-            feature_file = file[:-4] + "_features.npy"
-            feature_file = os.path.join(path, feature_file)
-
-            # If the file exists load the previously computed features
-            if os.path.exists(os.path.join(path, feature_file)):
+            # caching the features file
+            feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
+            if os.path.exists(os.path.join(path, feature_file)) and not override_cache:
                 features = np.load(feature_file)
-
-            # If the file does not exist, compute the features (very long) and save them for future use
             else:
+                # this part is costly because of the amount of test data
                 features = compute_features(points, points, self.radius)
                 np.save(feature_file, features)
 
-            # Concatenate features of several clouds
-            # (For this minichallenge this is useless as the test set contains only one cloud)
             test_features = np.vstack((test_features, features))
 
         return test_features
