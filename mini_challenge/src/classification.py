@@ -1,12 +1,14 @@
 import os
 import time
 from datetime import datetime
+from typing import List
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
 from .descriptors import compute_features
 from .ply import read_ply
+from .subsampling import grid_subsampling
 
 
 class FeaturesExtractor:
@@ -19,8 +21,11 @@ class FeaturesExtractor:
         Initiation method called when an object of this class is created. This is where you can define parameters
         """
 
-        # neighborhood radius
-        self.radius = 0.5
+        # subsampling and neighborhood parameters
+        self.radius = 0.1
+        self.n_scales = 8
+        self.phi = 2
+        self.rho = 5
 
         # number of training points per class
         self.num_per_class = 500
@@ -36,6 +41,38 @@ class FeaturesExtractor:
             6: "Vegetation",
         }
 
+    def compute_features(
+        self, query_points: np.ndarray, subsampled_clouds: List[np.ndarray]
+    ) -> np.ndarray:
+
+        features = np.empty((len(query_points), 0))
+        # computing features for the points of the chosen indices and place them in a [N, 21] matrix
+        for scale in range(self.n_scales):
+            features = np.hstack(
+                (
+                    features,
+                    compute_features(
+                        query_points,
+                        subsampled_clouds[scale],
+                        self.radius * self.phi**scale,
+                    ),
+                )
+            )
+
+        return features
+
+    def subsample_point_cloud(self, point_cloud: np.ndarray) -> List[np.ndarray]:
+        subsampled_clouds = [point_cloud]
+
+        for scale in range(1, self.n_scales):
+            subsampled_clouds.append(
+                grid_subsampling(
+                    point_cloud, self.radius * self.phi**scale / self.rho
+                )
+            )
+
+        return subsampled_clouds
+
     def extract_training(self, path):
         """
         This method extract features/labels of a subset of the training points. It ensures a balanced choice between
@@ -49,7 +86,7 @@ class FeaturesExtractor:
 
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
-        training_features = np.empty((0, 21))
+        training_features = np.empty((0, 21 * self.n_scales))
         training_labels = np.empty((0,))
 
         for i, file in enumerate(ply_files):
@@ -57,6 +94,7 @@ class FeaturesExtractor:
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
             labels = cloud_ply["class"]
+            subsampled_clouds = self.subsample_point_cloud(points)
 
             training_inds = np.empty(0, dtype=np.int32)
 
@@ -82,9 +120,7 @@ class FeaturesExtractor:
                     )
 
             training_points = points[training_inds, :]
-
-            # computing features for the points of the chosen indices and place them in a [N, 21] matrix
-            features = compute_features(training_points, points, self.radius)
+            features = self.compute_features(training_points, subsampled_clouds)
 
             training_features = np.vstack((training_features, features))
             training_labels = np.hstack((training_labels, labels[training_inds]))
@@ -156,19 +192,20 @@ class FeaturesExtractor:
 
         return features
 
-    def extract_test(self, path: str, override_cache: bool = False):
+    def extract_test(self, path: str, override_cache: bool = True):
         """
         Extracts features of all the test points. Caches the features computed in a npy file.
         """
 
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
-        test_features = np.empty((0, 21))
+        test_features = np.empty((0, 21 * self.n_scales))
 
         for i, file in enumerate(ply_files):
 
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
+            subsampled_clouds = self.subsample_point_cloud(points)
 
             # caching the features file
             feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
@@ -176,7 +213,7 @@ class FeaturesExtractor:
                 features = np.load(feature_file)
             else:
                 # this part is costly because of the amount of test data
-                features = compute_features(points, points, self.radius)
+                features = self.compute_features(points, subsampled_clouds)
                 np.save(feature_file, features)
 
             test_features = np.vstack((test_features, features))
