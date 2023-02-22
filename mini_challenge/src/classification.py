@@ -9,6 +9,7 @@ from sklearn.ensemble import RandomForestClassifier
 from .descriptors import compute_features
 from .ply import read_ply
 from .subsampling import grid_subsampling
+from .perf_monitoring import timeit
 
 
 class FeaturesExtractor:
@@ -41,6 +42,7 @@ class FeaturesExtractor:
             6: "Vegetation",
         }
 
+    @timeit
     def compute_features(
         self, query_points: np.ndarray, subsampled_clouds: List[np.ndarray]
     ) -> np.ndarray:
@@ -61,6 +63,7 @@ class FeaturesExtractor:
 
         return features
 
+    @timeit
     def subsample_point_cloud(self, point_cloud: np.ndarray) -> List[np.ndarray]:
         subsampled_clouds = [point_cloud]
 
