@@ -108,36 +108,36 @@ class FeaturesExtractor:
 
             training_inds = np.empty(0, dtype=np.int32)
 
-            for label, name in self.label_names.items():
-
-                # class 0 is excluded from training
-                if label == 0:
-                    continue
-
-                label_inds = np.where(labels == label)[0]
-                if self.verbose:
-                    print(
-                        f"{len(label_inds)} elements available for class {self.label_names[label]}"
-                    )
-
-                # taking all the indices if there is not enough of them
-                if len(label_inds) <= self.num_per_class:
-                    training_inds = np.hstack((training_inds, label_inds))
-
-                # choosing randomly otherwise
-                else:
-                    random_choice = np.random.choice(
-                        len(label_inds), self.num_per_class, replace=False
-                    )
-                    training_inds = np.hstack(
-                        (training_inds, label_inds[random_choice])
-                    )
-
             # caching the features file
             feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
             if os.path.exists(os.path.join(path, feature_file)) and not override_cache:
                 features = np.load(feature_file)
             else:
+                for label, name in self.label_names.items():
+
+                    # class 0 is excluded from training
+                    if label == 0:
+                        continue
+
+                    label_inds = np.where(labels == label)[0]
+                    if self.verbose:
+                        print(
+                            f"{len(label_inds)} elements available for class {self.label_names[label]}"
+                        )
+
+                    # taking all the indices if there is not enough of them
+                    if len(label_inds) <= self.num_per_class:
+                        training_inds = np.hstack((training_inds, label_inds))
+
+                    # choosing randomly otherwise
+                    else:
+                        random_choice = np.random.choice(
+                            len(label_inds), self.num_per_class, replace=False
+                        )
+                        training_inds = np.hstack(
+                            (training_inds, label_inds[random_choice])
+                        )
+
                 subsampled_clouds = self.subsample_point_cloud(points)
                 training_points = points[training_inds, :]
                 features = self.compute_features(training_points, subsampled_clouds)
