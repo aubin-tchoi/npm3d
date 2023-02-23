@@ -2,7 +2,6 @@
 Utility functions to read/write .ply files
 """
 import sys
-from typing import Union
 
 import numpy as np
 
@@ -130,7 +129,7 @@ def write_ply(filename, field_list, field_names):
         filename (str): the name of the file to which the data is saved. A '.ply' extension will be appended to the
             file name if it does no already have one.
 
-        field_list (Union[list, tuple, np.ndarray]): the fields to be saved in the ply file. Either a numpy array, a list of
+        field_list ([list, tuple, np.ndarray]): the fields to be saved in the ply file. Either a numpy array, a list of
             numpy arrays or a tuple of numpy arrays. Each 1D numpy array and each column of 2D numpy arrays are
             considered.
 
