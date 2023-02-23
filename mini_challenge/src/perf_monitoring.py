@@ -7,8 +7,10 @@ def timeit(func: Callable) -> Callable:
     """
     Decorator for timing function execution time.
 
-    :param func: The function to time.
-    :return: The wrapped function.
+    Args:
+        func: The function to time.
+    Returns:
+        The wrapped function.
     """
 
     @wraps(func)
@@ -32,8 +34,10 @@ def runtime_alert(time_limit: int) -> Callable[[], Callable]:
         """
         Decorator that triggers and alert if the runtime of the function exceeds a time limit.
 
-        :param func: The function to time.
-        :return: The wrapped function.
+        Args:
+            func: The function to time.
+        Returns:
+            The wrapped function.
         """
 
         @wraps(func)
@@ -57,15 +61,18 @@ def checkpoint(time_ref: float = perf_counter()) -> Callable[..., None]:
     Closure that stores a time checkpoint that is updated at every call.
     Each call prints the time elapsed since the last checkpoint with a custom message.
 
-    :param time_ref: The time reference to start from. By default, the time of the call will be taken.
-    :return: The closure.
+    Args:
+        time_ref: The time reference to start from. By default, the time of the call will be taken.
+    Returns:
+        The closure.
     """
 
     def _closure(message: str = "") -> None:
         """
         Prints the time elapsed since the previous call.
 
-        :param message: Custom message to print. The overall result will be: 'message: time_elapsed'.
+        Args:
+            message: Custom message to print. The overall result will be: 'message: time_elapsed'.
         """
         nonlocal time_ref
         current_time = perf_counter()
@@ -85,7 +92,8 @@ class Checkpoint:
         """
         Initializes a new timer.
 
-        :param _time_reference: The time origin of the checkpoint. If omitted, will be set to the date of the call.
+        Args:
+             _time_reference: The time origin of the checkpoint. If omitted, will be set to the date of the call.
         """
         self._time_reference = _time_reference
 
@@ -93,7 +101,8 @@ class Checkpoint:
         """
         Prints the time elapsed since the previous call.
 
-        :param message: Custom message to print. The overall result will be: 'message: time_elapsed'.
+        Args:
+            message: Custom message to print. The overall result will be: 'message: time_elapsed'.
         """
         current_time = perf_counter()
         if message != "":
