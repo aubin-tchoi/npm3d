@@ -105,7 +105,6 @@ class FeaturesExtractor:
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
             labels = cloud_ply["class"]
-            subsampled_clouds = self.subsample_point_cloud(points)
 
             training_inds = np.empty(0, dtype=np.int32)
 
@@ -139,6 +138,7 @@ class FeaturesExtractor:
             if os.path.exists(os.path.join(path, feature_file)) and not override_cache:
                 features = np.load(feature_file)
             else:
+                subsampled_clouds = self.subsample_point_cloud(points)
                 training_points = points[training_inds, :]
                 features = self.compute_features(training_points, subsampled_clouds)
                 np.save(feature_file, features)
@@ -167,13 +167,13 @@ class FeaturesExtractor:
 
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
-            subsampled_clouds = self.subsample_point_cloud(points)
 
             # caching the features file
             feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
             if os.path.exists(os.path.join(path, feature_file)) and not override_cache:
                 features = np.load(feature_file)
             else:
+                subsampled_clouds = self.subsample_point_cloud(points)
                 # this part is costly because of the amount of test data
                 features = self.compute_features(points, subsampled_clouds)
                 np.save(feature_file, features)
