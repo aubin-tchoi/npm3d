@@ -78,7 +78,7 @@ class FeaturesExtractor:
 
         return subsampled_clouds
 
-    def extract_features(self, path, test_file: str = ""):
+    def extract_features(self, path, test_file: str = "", override_cache: bool = False):
         """
         This method extract features/labels of a subset of the training points. It ensures a balanced choice between
         classes.
@@ -86,6 +86,7 @@ class FeaturesExtractor:
         Args:
             path: path where the ply files are located.
             test_file: name of the ply file that will be used for validation.
+            override_cache: whether cached features should be overriden or not.
         Returns:
             features and labels
         """
@@ -133,8 +134,14 @@ class FeaturesExtractor:
                         (training_inds, label_inds[random_choice])
                     )
 
-            training_points = points[training_inds, :]
-            features = self.compute_features(training_points, subsampled_clouds)
+            # caching the features file
+            feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
+            if os.path.exists(os.path.join(path, feature_file)) and not override_cache:
+                features = np.load(feature_file)
+            else:
+                training_points = points[training_inds, :]
+                features = self.compute_features(training_points, subsampled_clouds)
+                np.save(feature_file, features)
 
             if file == test_file:
                 test_features = np.vstack((test_features, features))
@@ -190,7 +197,7 @@ class FeaturesExtractor:
 
         for i, file in enumerate(ply_files):
             if self.verbose:
-                print(f"Reading file {file}")
+                print(f"\nReading file {file}")
 
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
