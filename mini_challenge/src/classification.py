@@ -160,6 +160,7 @@ class FeaturesExtractor:
                     continue
 
                 label_inds = np.where(labels == label)[0]
+                print(f"{len(label_inds)} elements available for class {self.label_names[label]}")
 
                 # if you do not have enough indices, just take all of them
                 if len(label_inds) <= self.num_per_class:
