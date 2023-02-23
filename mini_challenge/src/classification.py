@@ -14,10 +14,10 @@ from .perf_monitoring import timeit
 
 class FeaturesExtractor:
     """
-    Class that computes features from point clouds
+    Class that computes features from point clouds.
     """
 
-    def __init__(self):
+    def __init__(self, verbose: bool = True):
         """
         Initiation method called when an object of this class is created. This is where you can define parameters
         """
@@ -29,7 +29,7 @@ class FeaturesExtractor:
         self.rho = 5
 
         # number of training points per class
-        self.num_per_class = 500
+        self.num_per_class = 50000
 
         # classification labels
         self.label_names = {
@@ -41,6 +41,8 @@ class FeaturesExtractor:
             5: "Cars",
             6: "Vegetation",
         }
+
+        self.verbose = verbose
 
     @timeit
     def compute_features(
@@ -76,23 +78,28 @@ class FeaturesExtractor:
 
         return subsampled_clouds
 
-    def extract_training(self, path):
+    def extract_features(self, path, test_file: str = ""):
         """
         This method extract features/labels of a subset of the training points. It ensures a balanced choice between
         classes.
 
         Args:
             path: path where the ply files are located.
+            test_file: name of the ply file that will be used for validation.
         Returns:
             features and labels
         """
 
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
-        training_features = np.empty((0, 21 * self.n_scales))
-        training_labels = np.empty((0,))
+        train_features = np.empty((0, 21 * self.n_scales))
+        train_labels = np.empty((0,))
+        test_features = np.empty((0, 21 * self.n_scales))
+        test_labels = np.empty((0,))
 
         for i, file in enumerate(ply_files):
+            if self.verbose:
+                print(f"\nReading file {file}")
 
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
@@ -108,6 +115,10 @@ class FeaturesExtractor:
                     continue
 
                 label_inds = np.where(labels == label)[0]
+                if self.verbose:
+                    print(
+                        f"{len(label_inds)} elements available for class {self.label_names[label]}"
+                    )
 
                 # taking all the indices if there is not enough of them
                 if len(label_inds) <= self.num_per_class:
@@ -125,12 +136,46 @@ class FeaturesExtractor:
             training_points = points[training_inds, :]
             features = self.compute_features(training_points, subsampled_clouds)
 
-            training_features = np.vstack((training_features, features))
-            training_labels = np.hstack((training_labels, labels[training_inds]))
+            if file == test_file:
+                test_features = np.vstack((test_features, features))
+                test_labels = np.hstack((test_labels, labels[training_inds]))
+            else:
+                train_features = np.vstack((train_features, features))
+                train_labels = np.hstack((train_labels, labels[training_inds]))
 
-        return training_features, training_labels
+        return train_features, train_labels, test_features, test_labels
 
-    def extract_train_and_test(self, path: str, test_file: str = ""):
+    def extract_features_no_label(self, path: str, override_cache: bool = False):
+        """
+        Extracts features of all the test points. Caches the features computed in a npy file.
+        """
+
+        ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
+
+        test_features = np.empty((0, 21 * self.n_scales))
+
+        for i, file in enumerate(ply_files):
+            if self.verbose:
+                print(f"\nReading file {file}")
+
+            cloud_ply = read_ply(os.path.join(path, file))
+            points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
+            subsampled_clouds = self.subsample_point_cloud(points)
+
+            # caching the features file
+            feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
+            if os.path.exists(os.path.join(path, feature_file)) and not override_cache:
+                features = np.load(feature_file)
+            else:
+                # this part is costly because of the amount of test data
+                features = self.compute_features(points, subsampled_clouds)
+                np.save(feature_file, features)
+
+            test_features = np.vstack((test_features, features))
+
+        return test_features
+
+    def extract_point_clouds(self, path: str, test_file: str = ""):
         """
         Extracts and split a dataset into test and train.
         The splitting cannot be done arbitrarily when using deep learning, the model could over-fit by learning the
@@ -144,7 +189,8 @@ class FeaturesExtractor:
         test_labels = np.empty((0,))
 
         for i, file in enumerate(ply_files):
-            print(f"Reading file {file}")
+            if self.verbose:
+                print(f"Reading file {file}")
 
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
@@ -160,7 +206,10 @@ class FeaturesExtractor:
                     continue
 
                 label_inds = np.where(labels == label)[0]
-                print(f"{len(label_inds)} elements available for class {self.label_names[label]}")
+                if self.verbose:
+                    print(
+                        f"{len(label_inds)} elements available for class {self.label_names[label]}"
+                    )
 
                 # if you do not have enough indices, just take all of them
                 if len(label_inds) <= self.num_per_class:
@@ -183,46 +232,20 @@ class FeaturesExtractor:
 
         return train_features, train_labels, test_features, test_labels
 
-    @staticmethod
-    def extract_data_no_label(path: str):
+    def extract_point_cloud_no_label(self, path: str):
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
-        features = np.empty((0, 3))
+        point_cloud = np.empty((0, 3))
 
         for i, file in enumerate(ply_files):
-            cloud_ply = read_ply(os.path.join(path, file))
-            points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
-            features = np.vstack((features, points))
-
-        return features
-
-    def extract_test(self, path: str, override_cache: bool = True):
-        """
-        Extracts features of all the test points. Caches the features computed in a npy file.
-        """
-
-        ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
-
-        test_features = np.empty((0, 21 * self.n_scales))
-
-        for i, file in enumerate(ply_files):
+            if self.verbose:
+                print(f"\nReading file {file}")
 
             cloud_ply = read_ply(os.path.join(path, file))
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
-            subsampled_clouds = self.subsample_point_cloud(points)
+            point_cloud = np.vstack((point_cloud, points))
 
-            # caching the features file
-            feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
-            if os.path.exists(os.path.join(path, feature_file)) and not override_cache:
-                features = np.load(feature_file)
-            else:
-                # this part is costly because of the amount of test data
-                features = self.compute_features(points, subsampled_clouds)
-                np.save(feature_file, features)
-
-            test_features = np.vstack((test_features, features))
-
-        return test_features
+        return point_cloud
 
 
 if __name__ == "__main__":
@@ -237,7 +260,9 @@ if __name__ == "__main__":
     print("Collect Training Features")
     t0 = time.time()
     f_extractor = FeaturesExtractor()
-    training_features, training_labels = f_extractor.extract_training(training_path)
+    training_features, training_labels, _, __ = f_extractor.extract_features(
+        training_path
+    )
     t1 = time.time()
     print("Done in %.3fs\n" % (t1 - t0))
 
@@ -250,7 +275,7 @@ if __name__ == "__main__":
 
     print("Compute testing features")
     t0 = time.time()
-    test_features = f_extractor.extract_test(test_path)
+    test_features = f_extractor.extract_features_no_label(test_path)
     t1 = time.time()
     print("Done in %.3fs\n" % (t1 - t0))
 
