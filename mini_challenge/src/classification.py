@@ -110,8 +110,13 @@ class FeaturesExtractor:
 
             # caching the features file
             feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
-            if os.path.exists(os.path.join(path, feature_file)) and not override_cache:
+            # the labels have to be cached as well because the indices are picked randomly
+            label_file = os.path.join(path, f"{file[:-4]}_labels.npy")
+            if os.path.exists(feature_file) and os.path.exists(label_file) and not override_cache:
+                if self.verbose:
+                    print("Using cached features and labels")
                 features = np.load(feature_file)
+                selected_labels = np.load(label_file)
             else:
                 for label, name in self.label_names.items():
 
@@ -137,18 +142,20 @@ class FeaturesExtractor:
                         training_inds = np.hstack(
                             (training_inds, label_inds[random_choice])
                         )
+                selected_labels = labels[training_inds]
 
                 subsampled_clouds = self.subsample_point_cloud(points)
                 training_points = points[training_inds, :]
                 features = self.compute_features(training_points, subsampled_clouds)
                 np.save(feature_file, features)
+                np.save(label_file, selected_labels)
 
             if file == test_file:
                 test_features = np.vstack((test_features, features))
-                test_labels = np.hstack((test_labels, labels[training_inds]))
+                test_labels = np.hstack((test_labels, selected_labels))
             else:
                 train_features = np.vstack((train_features, features))
-                train_labels = np.hstack((train_labels, labels[training_inds]))
+                train_labels = np.hstack((train_labels, selected_labels))
 
         return train_features, train_labels, test_features, test_labels
 
@@ -170,7 +177,9 @@ class FeaturesExtractor:
 
             # caching the features file
             feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
-            if os.path.exists(os.path.join(path, feature_file)) and not override_cache:
+            if os.path.exists(feature_file) and not override_cache:
+                if self.verbose:
+                    print("Using cached features")
                 features = np.load(feature_file)
             else:
                 subsampled_clouds = self.subsample_point_cloud(points)
