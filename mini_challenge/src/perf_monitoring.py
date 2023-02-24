@@ -77,7 +77,7 @@ def checkpoint(time_ref: float = perf_counter()) -> Callable[..., None]:
         nonlocal time_ref
         current_time = perf_counter()
         if message != "":
-            print(f"{message}: {current_time - time_ref:.4f}")
+            print(f"{message}: {current_time - time_ref:.2f} seconds")
         time_ref = current_time
 
     return _closure
