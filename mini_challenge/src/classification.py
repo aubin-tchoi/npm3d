@@ -102,22 +102,23 @@ class FeaturesExtractor:
             if self.verbose:
                 print(f"\nReading file {file}")
 
-            cloud_ply = read_ply(os.path.join(path, file))
-            points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
-            labels = cloud_ply["class"]
-
             training_inds = np.empty(0, dtype=np.int32)
 
             # caching the features file
             feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
             # the labels have to be cached as well because the indices are picked randomly
             label_file = os.path.join(path, f"{file[:-4]}_labels.npy")
+
             if os.path.exists(feature_file) and os.path.exists(label_file) and not override_cache:
                 if self.verbose:
                     print("Using cached features and labels")
                 features = np.load(feature_file)
                 selected_labels = np.load(label_file)
             else:
+                cloud_ply = read_ply(os.path.join(path, file))
+                points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
+                labels = cloud_ply["class"]
+
                 for label, name in self.label_names.items():
 
                     # class 0 is excluded from training
@@ -172,9 +173,6 @@ class FeaturesExtractor:
             if self.verbose:
                 print(f"\nReading file {file}")
 
-            cloud_ply = read_ply(os.path.join(path, file))
-            points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
-
             # caching the features file
             feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
             if os.path.exists(feature_file) and not override_cache:
@@ -182,6 +180,8 @@ class FeaturesExtractor:
                     print("Using cached features")
                 features = np.load(feature_file)
             else:
+                cloud_ply = read_ply(os.path.join(path, file))
+                points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
                 subsampled_clouds = self.subsample_point_cloud(points)
                 # this part is costly because of the amount of test data
                 features = self.compute_features(points, subsampled_clouds)
