@@ -1,15 +1,12 @@
 import os
-import time
-from datetime import datetime
 from typing import List
 
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
 
 from .descriptors import compute_features
+from .perf_monitoring import timeit
 from .ply import read_ply
 from .subsampling import grid_subsampling
-from .perf_monitoring import timeit
 
 
 class FeaturesExtractor:
@@ -78,6 +75,35 @@ class FeaturesExtractor:
 
         return subsampled_clouds
 
+    def sample_indices(self, labels):
+        indices = np.empty(0, dtype=np.int32)
+
+        # looping over each class to choose training points
+        for label, name in self.label_names.items():
+
+            # excluding class 0 in training
+            if label == 0:
+                continue
+
+            label_indices = np.where(labels == label)[0]
+            if self.verbose:
+                print(
+                    f"{len(label_indices)} elements available for class {self.label_names[label]}"
+                )
+
+            # if you do not have enough indices, just take all of them
+            if len(label_indices) <= self.num_per_class:
+                indices = np.hstack((indices, label_indices))
+
+            # if you have more than enough indices, choose randomly
+            else:
+                random_choice = np.random.choice(
+                    len(label_indices), self.num_per_class, replace=False
+                )
+                indices = np.hstack((indices, label_indices[random_choice]))
+
+        return indices
+
     def extract_features(self, path, test_file: str = "", override_cache: bool = False):
         """
         This method extract features/labels of a subset of the training points. It ensures a balanced choice between
@@ -102,14 +128,16 @@ class FeaturesExtractor:
             if self.verbose:
                 print(f"\nReading file {file}")
 
-            training_inds = np.empty(0, dtype=np.int32)
-
             # caching the features file
             feature_file = os.path.join(path, f"{file[:-4]}_features.npy")
             # the labels have to be cached as well because the indices are picked randomly
             label_file = os.path.join(path, f"{file[:-4]}_labels.npy")
 
-            if os.path.exists(feature_file) and os.path.exists(label_file) and not override_cache:
+            if (
+                os.path.exists(feature_file)
+                and os.path.exists(label_file)
+                and not override_cache
+            ):
                 if self.verbose:
                     print("Using cached features and labels")
                 features = np.load(feature_file)
@@ -119,35 +147,13 @@ class FeaturesExtractor:
                 points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
                 labels = cloud_ply["class"]
 
-                for label, name in self.label_names.items():
-
-                    # class 0 is excluded from training
-                    if label == 0:
-                        continue
-
-                    label_inds = np.where(labels == label)[0]
-                    if self.verbose:
-                        print(
-                            f"{len(label_inds)} elements available for class {self.label_names[label]}"
-                        )
-
-                    # taking all the indices if there is not enough of them
-                    if len(label_inds) <= self.num_per_class:
-                        training_inds = np.hstack((training_inds, label_inds))
-
-                    # choosing randomly otherwise
-                    else:
-                        random_choice = np.random.choice(
-                            len(label_inds), self.num_per_class, replace=False
-                        )
-                        training_inds = np.hstack(
-                            (training_inds, label_inds[random_choice])
-                        )
-                selected_labels = labels[training_inds]
+                training_indices = self.sample_indices(labels)
+                selected_labels = labels[training_indices]
 
                 subsampled_clouds = self.subsample_point_cloud(points)
-                training_points = points[training_inds, :]
+                training_points = points[training_indices, :]
                 features = self.compute_features(training_points, subsampled_clouds)
+
                 np.save(feature_file, features)
                 np.save(label_file, selected_labels)
 
@@ -158,7 +164,10 @@ class FeaturesExtractor:
                 train_features = np.vstack((train_features, features))
                 train_labels = np.hstack((train_labels, selected_labels))
 
-        return train_features, train_labels, test_features, test_labels
+        if test_labels.shape == (0,):
+            return train_features, train_labels
+        else:
+            return train_features, train_labels, test_features, test_labels
 
     def extract_features_no_label(self, path: str, override_cache: bool = False):
         """
@@ -212,31 +221,7 @@ class FeaturesExtractor:
             points = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
             labels = cloud_ply["class"]
 
-            indices = np.empty(0, dtype=np.int32)
-
-            # looping over each class to choose training points
-            for label, name in self.label_names.items():
-
-                # excluding class 0 in training
-                if label == 0:
-                    continue
-
-                label_inds = np.where(labels == label)[0]
-                if self.verbose:
-                    print(
-                        f"{len(label_inds)} elements available for class {self.label_names[label]}"
-                    )
-
-                # if you do not have enough indices, just take all of them
-                if len(label_inds) <= self.num_per_class:
-                    indices = np.hstack((indices, label_inds))
-
-                # if you have more than enough indices, choose randomly
-                else:
-                    random_choice = np.random.choice(
-                        len(label_inds), self.num_per_class, replace=False
-                    )
-                    indices = np.hstack((indices, label_inds[random_choice]))
+            indices = self.sample_indices(labels)
 
             # one file is designated as the test file
             if file == test_file:
@@ -246,7 +231,10 @@ class FeaturesExtractor:
                 train_features = np.vstack((train_features, points[indices, :]))
                 train_labels = np.hstack((train_labels, labels[indices]))
 
-        return train_features, train_labels, test_features, test_labels
+        if test_labels.shape == (0,):
+            return train_features, train_labels
+        else:
+            return train_features, train_labels, test_features, test_labels
 
     def extract_point_cloud_no_label(self, path: str):
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
@@ -262,53 +250,3 @@ class FeaturesExtractor:
             point_cloud = np.vstack((point_cloud, points))
 
         return point_cloud
-
-
-if __name__ == "__main__":
-    # paths of the training and test files
-    training_path = "../data/training"
-    test_path = "../data/test"
-
-    #   For this simple algorithm, we only compute the features for a subset of the training points. We choose N points
-    #   per class in each training file. This has two advantages : balancing the class for our classifier and saving a
-    #   lot of computational time.
-
-    print("Collect Training Features")
-    t0 = time.time()
-    f_extractor = FeaturesExtractor()
-    training_features, training_labels, _, __ = f_extractor.extract_features(
-        training_path
-    )
-    t1 = time.time()
-    print("Done in %.3fs\n" % (t1 - t0))
-
-    print("Training Random Forest")
-    t0 = time.time()
-    clf = RandomForestClassifier()
-    clf.fit(training_features, training_labels)
-    t1 = time.time()
-    print("Done in %.3fs\n" % (t1 - t0))
-
-    print("Compute testing features")
-    t0 = time.time()
-    test_features = f_extractor.extract_features_no_label(test_path)
-    t1 = time.time()
-    print("Done in %.3fs\n" % (t1 - t0))
-
-    print("Test")
-    t0 = time.time()
-    predictions = clf.predict(test_features)
-    t1 = time.time()
-    print("Done in %.3fs\n" % (t1 - t0))
-
-    assert predictions.shape[0] == 3079187, "Incorrect number of predictions"
-
-    print("Save predictions")
-    t0 = time.time()
-    np.savetxt(
-        f"submissions/feat-{datetime.now().strftime('%Y_%m_%d-%H_%M')}.txt",
-        predictions,
-        fmt="%d",
-    )
-    t1 = time.time()
-    print("Done in %.3fs\n" % (t1 - t0))
