@@ -182,19 +182,16 @@ def write_ply(filename, field_list, field_names):
     # open in text mode to write the header
     with open(filename, "w") as plyfile:
 
-        # First magical word
-        header = ["ply"]
+        # first magical word and encoding format
+        header = ["ply", "format binary_" + sys.byteorder + "_endian 1.0"]
 
-        # Encoding format
-        header.append("format binary_" + sys.byteorder + "_endian 1.0")
-
-        # Points properties description
+        # points properties description
         header.extend(header_properties(field_list, field_names))
 
-        # End of header
+        # end of header
         header.append("end_header")
 
-        # Write all lines
+        # write all lines
         for line in header:
             plyfile.write("%s\n" % line)
 

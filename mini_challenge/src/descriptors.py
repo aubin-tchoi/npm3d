@@ -1,17 +1,14 @@
 """
 Implementation of local PCA on point clouds for normals computations and feature extraction (PCA-based descriptors).
 """
-import argparse
 from typing import Optional, Tuple, List
 
 import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.neighbors import KDTree
 
-from .ply import write_ply, read_ply
 
-
-def PCA(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def pca(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Computes the eigenvalues and eigenvectors of the covariance matrix of a point cloud.
     """
@@ -36,7 +33,7 @@ def PCA(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     )
 
 
-def compute_local_PCA(
+def compute_local_pca(
     query_points: np.ndarray,
     cloud_points: np.ndarray,
     nghbrd_search: str = "spherical",
@@ -82,7 +79,7 @@ def compute_local_PCA(
     moments = np.zeros((query_points.shape[0], 8))
 
     for i, point in enumerate(query_points):
-        all_eigenvalues[i], all_eigenvectors[i], moments[i] = PCA(
+        all_eigenvalues[i], all_eigenvectors[i], moments[i] = pca(
             cloud_points[neighborhoods[i]]
         )
 
@@ -95,7 +92,7 @@ def compute_basic_features(
     """
     Computes PCA-based descriptors on a point cloud.
     """
-    all_eigenvalues, all_eigenvectors, _, __ = compute_local_PCA(
+    all_eigenvalues, all_eigenvectors, _, __ = compute_local_pca(
         query_points, cloud_points, radius=radius
     )
     lbd3, lbd2, lbd1 = (
@@ -119,7 +116,7 @@ def compute_features(query_points: np.ndarray, cloud_points: np.ndarray, radius:
     """
     Computes PCA-based descriptors on a point cloud.
     """
-    all_eigenvalues, all_eigenvectors, moments, neighborhood_sizes = compute_local_PCA(
+    all_eigenvalues, all_eigenvectors, moments, neighborhood_sizes = compute_local_pca(
         query_points, cloud_points, radius=radius
     )
     lbd3, lbd2, lbd1 = (
