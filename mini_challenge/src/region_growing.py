@@ -1,29 +1,65 @@
 from queue import Queue
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Tuple, Dict
 
 import numpy as np
 from sklearn.neighbors import KDTree
 
 from .perf_monitoring import timeit
 
+default_thresholds = {
+    "omnivariance": 10,
+    "planarity": 40,
+    "neighborhood_size": 160,
+    "moment_x_sq": 200,
+    "moment_y_sq": 180,
+}
+
 
 def region_criterion(
-    p1, p2, n1, n2, threshold_dist: float = 0.1, threshold_angle: float = 0.1
-):
-    norm1 = np.maximum(np.linalg.norm(n1, axis=-1), 1e-10)[:, np.newaxis]
-    norm2 = np.maximum(np.linalg.norm(n2, axis=-1), 1e-10)[:, np.newaxis]
+    *features_comparison: Tuple[np.ndarray, np.ndarray, float],
+) -> np.ndarray:
+    """
+    Adds a condition that is checked when adding points to a region.
 
-    distance = np.abs((p1 - p2) @ n2.T) / norm2.T
-    angle = np.arccos(np.clip((n1 @ n2.T) / (norm1 @ norm2.T), -1, 1))
+    Args:
+        features_comparison: A list of tuples (feat, feat_ref, feat_threshold) where feat contains the features of the
+        candidate points, feat_ref a reference value and feat_threshold the maximum distance between feat and feat_ref.
+    Returns:
+         in_region: list of the indices of the points to add.
+    """
 
-    return (distance < threshold_dist) * (np.abs(angle) < threshold_angle)
+    conditions = np.zeros(
+        (len(features_comparison), features_comparison[0][0].shape[0])
+    )
+    for cond, (feat, feat_ref, feat_threshold) in enumerate(features_comparison):
+        conditions[cond] = np.abs(feat - feat_ref) < feat_threshold
+
+    return np.all(
+        conditions,
+        axis=0,
+    )
 
 
 def select_seed(point_cloud: np.ndarray) -> Union[np.ndarray, int]:
+    """
+    Selects a seed in a point cloud.
+    The current implementation returns the first point in the cloud. Since the order of the points is arbitrary, this
+    should come down to the same thing as taking a random point, albeit faster.
+    """
     return 0
 
 
-def region_growing(point_cloud: np.ndarray, radius: float):
+def region_growing(
+    point_cloud: np.ndarray,
+    radius: float,
+    omnivariance: np.ndarray,
+    planarity: np.ndarray,
+    neighborhood_size: np.ndarray,
+    moment_x_sq: np.ndarray,
+    moment_y_sq: np.ndarray,
+    thresholds: Dict[str, float],
+    verbose: bool = False,
+) -> np.ndarray:
     n_points = len(point_cloud)
     region = np.zeros(n_points, dtype=bool)
     visited = np.zeros(n_points, dtype=bool)
@@ -42,9 +78,39 @@ def region_growing(point_cloud: np.ndarray, radius: float):
 
         neighbors = neighbors[np.logical_not(visited[neighbors])]
         visited[neighbors] = True
-        region[neighbors] = True
+        if verbose and neighbors.shape[0] > 0:
+            print(f"\nNeighborhood size: {neighbors.shape[0]}")
 
-        for selected_neighbor in neighbors:
+        crit = region_criterion(
+            (
+                omnivariance[neighbors],
+                omnivariance[q],
+                thresholds["omnivariance"],
+            ),
+            (planarity[neighbors], planarity[q], thresholds["planarity"]),
+            (
+                neighborhood_size[neighbors],
+                neighborhood_size[q],
+                thresholds["neighborhood_size"],
+            ),
+            (
+                moment_x_sq[neighbors],
+                moment_x_sq[q],
+                thresholds["moment_x_sq"],
+            ),
+            (
+                moment_y_sq[neighbors],
+                moment_y_sq[q],
+                thresholds["moment_y_sq"],
+            ),
+        )
+        if verbose and neighbors.shape[0] > 0:
+            print(f"Number of points selected: {crit.sum()} / {neighbors.shape[0]}")
+
+        in_region = neighbors[crit]
+        region[in_region] = True
+
+        for selected_neighbor in in_region:
             queue.put(selected_neighbor)
 
     return region
@@ -71,19 +137,41 @@ def smooth_labels(
     labels: np.ndarray,
     radius: float,
     n_labels: int,
+    omnivariance: np.ndarray,
+    planarity: np.ndarray,
+    neighborhood_size: np.ndarray,
+    moment_x_sq: np.ndarray,
+    moment_y_sq: np.ndarray,
+    thresholds: Optional[Dict[str, float]] = None,
+    verbose: bool = False,
 ) -> None:
+    assert cloud.shape[0] == labels.shape[0], "Not the same number of points and labels"
+    assert (
+        cloud.shape[0] == omnivariance.shape[0]
+    ), "Not the same number of points and feature points"
+
+    if thresholds is None:
+        thresholds = default_thresholds
     non_smooth_area = np.ones(len(cloud), dtype=bool)
     non_smooth_area[labels == 1] = False
 
     while non_smooth_area.any():
-        print(f"{non_smooth_area.sum()} points unvisited.")
+        if verbose:
+            print(f"{non_smooth_area.sum()} points left unvisited.")
         remaining_indices = np.flatnonzero(non_smooth_area)
         region = region_growing(
             cloud[remaining_indices],
             radius,
+            omnivariance[remaining_indices],
+            planarity[remaining_indices],
+            neighborhood_size[remaining_indices],
+            moment_x_sq[remaining_indices],
+            moment_y_sq[remaining_indices],
+            thresholds,
         )
         labels[remaining_indices[region]] = aggregate_labels(
             labels[remaining_indices[region]], n_labels
         )
         non_smooth_area[remaining_indices[region]] = False
-        print(f"{region.sum()} points visited.\n")
+        if verbose:
+            print(f"{region.sum()} points visited.\n")

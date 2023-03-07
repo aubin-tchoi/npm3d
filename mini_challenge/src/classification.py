@@ -62,6 +62,15 @@ class FeaturesExtractor:
 
         return features
 
+    def aggregate_features(self, features: np.ndarray) -> np.ndarray:
+        return features.reshape(
+            (
+                features.shape[0],
+                features.shape[1] // self.n_scales,
+                self.n_scales,
+            )
+        ).sum(axis=-1)
+
     @timeit
     def subsample_point_cloud(self, point_cloud: np.ndarray) -> List[np.ndarray]:
         subsampled_clouds = [point_cloud]
