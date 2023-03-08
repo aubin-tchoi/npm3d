@@ -7,11 +7,11 @@ from sklearn.neighbors import KDTree
 from .perf_monitoring import timeit
 
 default_thresholds = {
-    "omnivariance": 10,
-    "planarity": 40,
-    "neighborhood_size": 160,
-    "moment_x_sq": 200,
-    "moment_y_sq": 180,
+    "omnivariance": 20,
+    "planarity": 65,
+    "neighborhood_size": 300,
+    "moment_x_sq": 400,
+    "moment_y_sq": 400,
 }
 
 
