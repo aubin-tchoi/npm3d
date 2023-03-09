@@ -16,7 +16,7 @@ default_thresholds = {
 
 
 def region_criterion(
-    *features_comparison: Tuple[np.ndarray, np.ndarray, float],
+    *features_comparison: Tuple[Union[np.ndarray, float], float, float],
 ) -> np.ndarray:
     """
     Adds a condition that is checked when adding points to a region.
@@ -49,6 +49,28 @@ def select_seed(point_cloud: np.ndarray) -> Union[np.ndarray, int]:
     return 0
 
 
+def get_avg_criterion(
+    feature: np.ndarray,
+    candidate: Union[np.ndarray, int],
+    cluster: np.ndarray,
+    threshold: float,
+) -> Tuple[Union[np.ndarray, float], float, float]:
+    return (
+        feature[candidate],
+        feature[cluster].mean(),
+        threshold * np.clip(feature[cluster].std(), a_min=1, a_max=None),
+    )
+
+
+def get_criterion(
+    feature: np.ndarray,
+    candidate: Union[np.ndarray, int],
+    ref_point: int,
+    threshold: float,
+) -> Tuple[Union[np.ndarray, float], float, float]:
+    return feature[candidate], feature[ref_point], threshold
+
+
 def region_growing(
     point_cloud: np.ndarray,
     radius: float,
@@ -59,6 +81,7 @@ def region_growing(
     moment_y_sq: np.ndarray,
     thresholds: Dict[str, float],
     verbose: bool = False,
+    use_means: bool = False,
 ) -> np.ndarray:
     n_points = len(point_cloud)
     region = np.zeros(n_points, dtype=bool)
@@ -81,28 +104,37 @@ def region_growing(
         if verbose and neighbors.shape[0] > 0:
             print(f"\nNeighborhood size: {neighbors.shape[0]}")
 
-        crit = region_criterion(
-            (
-                omnivariance[neighbors],
-                omnivariance[q],
-                thresholds["omnivariance"],
-            ),
-            (planarity[neighbors], planarity[q], thresholds["planarity"]),
-            (
-                neighborhood_size[neighbors],
-                neighborhood_size[q],
-                thresholds["neighborhood_size"],
-            ),
-            (
-                moment_x_sq[neighbors],
-                moment_x_sq[q],
-                thresholds["moment_x_sq"],
-            ),
-            (
-                moment_y_sq[neighbors],
-                moment_y_sq[q],
-                thresholds["moment_y_sq"],
-            ),
+        crit = (
+            region_criterion(
+                get_avg_criterion(
+                    omnivariance, neighbors, region, thresholds["omnivariance"]
+                ),
+                get_avg_criterion(
+                    planarity, neighbors, region, thresholds["planarity"]
+                ),
+                get_avg_criterion(
+                    neighborhood_size,
+                    neighbors,
+                    region,
+                    thresholds["neighborhood_size"],
+                ),
+                get_avg_criterion(
+                    moment_x_sq, neighbors, region, thresholds["moment_x_sq"]
+                ),
+                get_avg_criterion(
+                    moment_y_sq, neighbors, region, thresholds["moment_y_sq"]
+                ),
+            )
+            if use_means
+            else region_criterion(
+                get_criterion(omnivariance, neighbors, q, thresholds["omnivariance"]),
+                get_criterion(planarity, neighbors, q, thresholds["planarity"]),
+                get_criterion(
+                    neighborhood_size, neighbors, q, thresholds["neighborhood_size"]
+                ),
+                get_criterion(moment_x_sq, neighbors, q, thresholds["moment_x_sq"]),
+                get_criterion(moment_y_sq, neighbors, q, thresholds["moment_y_sq"]),
+            )
         )
         if verbose and neighbors.shape[0] > 0:
             print(f"Number of points selected: {crit.sum()} / {neighbors.shape[0]}")
