@@ -121,6 +121,12 @@ def aggregate_labels(
 ) -> int:
     if weights is None:
         weights = [1.0 for _ in range(n_labels)]
+        weights[
+            -3
+        ] = 0.1  # let's never predict pedestrian since there are only a few of them
+        weights[
+            1
+        ] = 1e-3  # we should not predict the ground since there is no ground anymore
 
     best_label, best_score = -1, 0
     for label in range(n_labels):
