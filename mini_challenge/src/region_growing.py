@@ -149,22 +149,30 @@ def region_growing(
 
 
 def aggregate_labels(
-    labels: np.ndarray, n_labels: int, weights: Optional[List[float]] = None
+    labels: np.ndarray,
+    n_labels: int,
+    weights: Optional[List[float]] = None,
+    in_depth_analysis: bool = False,
 ) -> int:
     if weights is None:
         weights = [1.0 for _ in range(n_labels)]
-        weights[
-            -3
-        ] = 0.1  # let's never predict pedestrian since there are only a few of them
-        weights[
-            1
-        ] = 1e-3  # we should not predict the ground since there is no ground anymore
+        # weights[-3] = 0.1  # let's never predict pedestrian since there are only a few of them
+        # weights[1] = 1e-3  # we should not predict the ground since there is no ground anymore
 
     best_label, best_score = -1, 0
     for label in range(n_labels):
         if (label_score := weights[label] * (labels == label).sum()) > best_score:
             best_label = label
             best_score = label_score
+
+    if in_depth_analysis:
+        # minlength is necessary if one label is not represented
+        label_scores = np.bincount(labels, minlength=n_labels) * np.array(weights)
+        softmax = np.exp(label_scores - np.max(label_scores))
+        softmax /= softmax.sum(axis=0)
+        print(f"Label weighted proportions: {str(softmax):.2f} ({labels.shape[0]} labels in total).")
+
+        return label_scores.argmax()
 
     return best_label
 
