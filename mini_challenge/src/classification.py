@@ -1,7 +1,8 @@
 import os
-from typing import List
+from typing import List, Dict
 
 import numpy as np
+from dataclasses import dataclass, field
 
 from .descriptors import compute_features
 from .perf_monitoring import timeit
@@ -9,27 +10,19 @@ from .ply import read_ply
 from .subsampling import grid_subsampling
 
 
+@dataclass
 class FeaturesExtractor:
     """
-    Class that computes features from point clouds.
+    Class that computes features on point clouds.
     """
-
-    def __init__(self, verbose: bool = True):
-        """
-        Initiation method called when an object of this class is created. This is where you can define parameters
-        """
-
-        # subsampling and neighborhood parameters
-        self.radius = 0.1
-        self.n_scales = 8
-        self.phi = 2
-        self.rho = 5
-
-        # number of training points per class
-        self.num_per_class = 50000
-
-        # classification labels
-        self.label_names = {
+    radius: float = 0.1
+    n_scales: int = 8
+    phi: float = 2
+    rho: float = 5
+    n_min_points_per_class: int = 50000
+    verbose: bool = True
+    label_names: Dict[int, str] = field(
+        default_factory=lambda: {
             0: "Unclassified",
             1: "Ground",
             2: "Building",
@@ -38,8 +31,7 @@ class FeaturesExtractor:
             5: "Cars",
             6: "Vegetation",
         }
-
-        self.verbose = verbose
+    )
 
     @timeit
     def compute_features(
@@ -101,13 +93,13 @@ class FeaturesExtractor:
                 )
 
             # if you do not have enough indices, just take all of them
-            if len(label_indices) <= self.num_per_class:
+            if len(label_indices) <= self.n_min_points_per_class:
                 indices = np.hstack((indices, label_indices))
 
             # if you have more than enough indices, choose randomly
             else:
                 random_choice = np.random.choice(
-                    len(label_indices), self.num_per_class, replace=False
+                    len(label_indices), self.n_min_points_per_class, replace=False
                 )
                 indices = np.hstack((indices, label_indices[random_choice]))
 
