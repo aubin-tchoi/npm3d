@@ -55,6 +55,10 @@ def get_avg_criterion(
     cluster: np.ndarray,
     threshold: float,
 ) -> Tuple[Union[np.ndarray, float], float, float]:
+    """
+    Creates a criterion that can be used in region_criterion by comparing the value on a point to the average on the
+    already identified region.
+    """
     return (
         feature[candidate],
         feature[cluster].mean(),
@@ -68,6 +72,10 @@ def get_criterion(
     ref_point: int,
     threshold: float,
 ) -> Tuple[Union[np.ndarray, float], float, float]:
+    """
+    Creates a criterion that can be used in region_criterion by comparing the value on a point to its parent (neighbor
+    that allowed it to be considered as a candidate).
+    """
     return feature[candidate], feature[ref_point], threshold
 
 
@@ -83,6 +91,9 @@ def region_growing(
     verbose: bool = False,
     use_means: bool = False,
 ) -> np.ndarray:
+    """
+    Samples a seed randomly in the point cloud and grows a region starting from it.
+    """
     n_points = len(point_cloud)
     region = np.zeros(n_points, dtype=bool)
     visited = np.zeros(n_points, dtype=bool)
@@ -154,6 +165,10 @@ def aggregate_labels(
     weights: Optional[List[float]] = None,
     in_depth_analysis: bool = False,
 ) -> int:
+    """
+    Aggregates an array of labels by computing the argmax of the pondered frequencies.
+    Allows an in-depth analysis that computes the softmax to check the distribution of the frequencies.
+    """
     if weights is None:
         weights = [1.0 for _ in range(n_labels)]
         # weights[-3] = 0.1  # let's never predict pedestrian since there are only a few of them
@@ -170,7 +185,9 @@ def aggregate_labels(
         label_scores = np.bincount(labels, minlength=n_labels) * np.array(weights)
         softmax = np.exp(label_scores - np.max(label_scores))
         softmax /= softmax.sum(axis=0)
-        print(f"Label weighted proportions: {str(softmax):.2f} ({labels.shape[0]} labels in total).")
+        print(
+            f"Label weighted proportions: {str(softmax):.2f} ({labels.shape[0]} labels in total)."
+        )
 
         return label_scores.argmax()
 
@@ -191,6 +208,10 @@ def smooth_labels(
     thresholds: Optional[Dict[str, float]] = None,
     verbose: bool = False,
 ) -> None:
+    """
+    Applies a smoothing algorithm on a labelled point cloud by growing regions around randomly selected seeds and
+    aggregating the labels in each region.
+    """
     assert cloud.shape[0] == labels.shape[0], "Not the same number of points and labels"
     assert (
         cloud.shape[0] == omnivariance.shape[0]

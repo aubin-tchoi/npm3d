@@ -13,8 +13,6 @@ from src import (
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-# TODO: add docstrings everywhere
-
 
 def parse_args() -> argparse.Namespace:
     """
@@ -82,10 +80,10 @@ def parse_args() -> argparse.Namespace:
 
     # learning parameters
     parser.add_argument(
-        "--n_min_points_per_class",
+        "--n_max_points_per_class",
         type=int,
         default=50000,
-        help="Minimal number of points chosen in each class",
+        help="Maximal number of points chosen in each class",
     )
     parser.add_argument(
         "--n_leaves",
@@ -123,7 +121,7 @@ if __name__ == "__main__":
         n_scales=args.n_scales,
         phi=args.phi,
         rho=args.rho,
-        n_min_points_per_class=args.n_min_points_per_class,
+        n_max_points_per_class=args.n_max_points_per_class,
         verbose=not args.no_verbose,
     )
     # additional parameters can be added here

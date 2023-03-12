@@ -9,16 +9,19 @@ import torch
 
 
 def print_ram_usage() -> None:
+    """
+    Prints the amount of RAM used and the percentage of available RAM used.
+    """
     print(
         f"RAM used: {psutil.virtual_memory()[3] / 10**9} GB "
         f"({psutil.virtual_memory()[2]} %)"
     )
 
 
-def track_time_memory_usage(func):
+def track_time_memory_usage(func: Callable[[...], Any]):
     """
-    Decorator that measures the execution time and the memory allocated (and not
-    deallocated) during the execution of a function.
+    Decorator that measures the execution time and the memory allocated (and not deallocated)
+    during the execution of a function.
     """
 
     @wraps(func)
@@ -47,6 +50,9 @@ def track_time_memory_usage(func):
 
 
 def print_tensors_size_in_memory(*tensors: torch.Tensor) -> None:
+    """
+    Prints the size on memory of a list of PyTorch Tensors.
+    """
     stack = traceback.extract_stack()
     code = stack[-2][-1]
     tensor_names = re.compile(r"\((.*?)\).*$").search(code).groups()[0].split(", ")
@@ -54,4 +60,3 @@ def print_tensors_size_in_memory(*tensors: torch.Tensor) -> None:
     for idx, tensor in enumerate(tensors):
         tensor_size = tensor.element_size() * tensor.nelement() / 1024**2
         print(f"Size in memory of tensor {tensor_names[idx]}: {tensor_size:.4f} MB")
-

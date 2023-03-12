@@ -15,11 +15,12 @@ class FeaturesExtractor:
     """
     Class that computes features on point clouds.
     """
+
     radius: float = 0.1
     n_scales: int = 8
     phi: float = 2
     rho: float = 5
-    n_min_points_per_class: int = 50000
+    n_max_points_per_class: int = 50000
     verbose: bool = True
     label_names: Dict[int, str] = field(
         default_factory=lambda: {
@@ -37,7 +38,10 @@ class FeaturesExtractor:
     def compute_features(
         self, query_points: np.ndarray, subsampled_clouds: List[np.ndarray]
     ) -> np.ndarray:
-
+        """
+        Computes multiscale spherical neighborhoods by applying compute_features on each subsampled point cloud.
+        Outputs n_scales times more features than compute_features.
+        """
         features = np.empty((len(query_points), 0))
         # computing features for the points of the chosen indices and place them in a [N, 21] matrix
         for scale in range(self.n_scales):
@@ -55,6 +59,9 @@ class FeaturesExtractor:
         return features
 
     def aggregate_features(self, features: np.ndarray) -> np.ndarray:
+        """
+        Sums an (n_features, n_scales)-array of features over the scales.
+        """
         return features.reshape(
             (
                 features.shape[0],
@@ -65,6 +72,9 @@ class FeaturesExtractor:
 
     @timeit
     def subsample_point_cloud(self, point_cloud: np.ndarray) -> List[np.ndarray]:
+        """
+        Sub-samples a point cloud with the radius defined by the multiscale neighborhoods (r_0 * phi ** s).
+        """
         subsampled_clouds = [point_cloud]
 
         for scale in range(1, self.n_scales):
@@ -76,7 +86,10 @@ class FeaturesExtractor:
 
         return subsampled_clouds
 
-    def sample_indices(self, labels):
+    def sample_indices(self, labels: np.ndarray) -> np.ndarray:
+        """
+        Samples at most n_max_points_per_class indices for each label to equilibrate the classes.
+        """
         indices = np.empty(0, dtype=np.int32)
 
         # looping over each class to choose training points
@@ -93,19 +106,21 @@ class FeaturesExtractor:
                 )
 
             # if you do not have enough indices, just take all of them
-            if len(label_indices) <= self.n_min_points_per_class:
+            if len(label_indices) <= self.n_max_points_per_class:
                 indices = np.hstack((indices, label_indices))
 
             # if you have more than enough indices, choose randomly
             else:
                 random_choice = np.random.choice(
-                    len(label_indices), self.n_min_points_per_class, replace=False
+                    len(label_indices), self.n_max_points_per_class, replace=False
                 )
                 indices = np.hstack((indices, label_indices[random_choice]))
 
         return indices
 
-    def extract_features(self, path, test_file: str = "", override_cache: bool = False):
+    def extract_features(
+        self, path: str, test_file: str = "", override_cache: bool = False
+    ):
         """
         This method extract features/labels of a subset of the training points. It ensures a balanced choice between
         classes.
@@ -117,7 +132,6 @@ class FeaturesExtractor:
         Returns:
             features and labels
         """
-
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
         train_features = np.empty((0, 21 * self.n_scales))
@@ -170,11 +184,12 @@ class FeaturesExtractor:
         else:
             return train_features, train_labels, test_features, test_labels
 
-    def extract_features_no_label(self, path: str, override_cache: bool = False):
+    def extract_features_no_label(
+        self, path: str, override_cache: bool = False
+    ) -> np.ndarray:
         """
         Extracts features of all the test points. Caches the features computed in a npy file.
         """
-
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
         test_features = np.empty((0, 21 * self.n_scales))
@@ -238,6 +253,9 @@ class FeaturesExtractor:
             return train_features, train_labels, test_features, test_labels
 
     def extract_point_cloud_no_label(self, path: str):
+        """
+        Extracts the point clouds in the specified folder.
+        """
         ply_files = [f for f in os.listdir(path) if f.endswith(".ply")]
 
         point_cloud = np.empty((0, 3))
