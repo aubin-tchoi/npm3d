@@ -53,40 +53,33 @@ def parse_header(plyfile, ext):
     return num_points, properties
 
 
-def read_ply(filename):
+def read_ply(filename) -> np.ndarray:
     """
-    Read ".ply" files
+    Reads ".ply" files.
 
-    Parameters
-    ----------
-    filename : string
-        the name of the file to read.
+    Args:
+        filename (str): the name of the file to read.
 
-    Returns
-    -------
-    result : array
-        data stored in the file
+    Returns:
+        result (numpy.ndarray): the data stored in the file
 
-    Examples
-    --------
-    Store data in file
+    Examples:
+        Store data in a file
+        >>> points = np.random.rand(5, 3)
+        >>> values = np.random.randint(2, size=10)
+        >>> write_ply('example.ply', [points, values], ['x', 'y', 'z', 'values'])
 
-    >>> points = np.random.rand(5, 3)
-    >>> values = np.random.randint(2, size=10)
-    >>> write_ply('example.ply', [points, values], ['x', 'y', 'z', 'values'])
+        Read the file
+        >>> data = read_ply('example.ply')
+        >>> values = data['values']
+        array([0, 0, 1, 1, 0])
 
-    Read the file
-
-    >>> data = read_ply('example.ply')
-    >>> values = data['values']
-    array([0, 0, 1, 1, 0])
-
-    >>> points = np.vstack((data['x'], data['y'], data['z'])).T
-    array([[ 0.466  0.595  0.324]
-           [ 0.538  0.407  0.654]
-           [ 0.850  0.018  0.988]
-           [ 0.395  0.394  0.363]
-           [ 0.873  0.996  0.092]])
+        >>> points = np.vstack((data['x'], data['y'], data['z'])).T
+        array([[ 0.466  0.595  0.324]
+               [ 0.538  0.407  0.654]
+               [ 0.850  0.018  0.988]
+               [ 0.395  0.394  0.363]
+               [ 0.873  0.996  0.092]])
 
     """
 
@@ -115,13 +108,10 @@ def read_ply(filename):
 
 def header_properties(field_list, field_names):
 
-    # List of lines to write
-    lines = []
+    # first line describing element vertex
+    lines = ["element vertex %d" % field_list[0].shape[0]]
 
-    # First line describing element vertex
-    lines.append("element vertex %d" % field_list[0].shape[0])
-
-    # Properties lines
+    # property lines
     i = 0
     for fields in field_list:
         for field in fields.T:
@@ -133,35 +123,28 @@ def header_properties(field_list, field_names):
 
 def write_ply(filename, field_list, field_names):
     """
-    Write ".ply" files
+    Writes in ".ply" files.
 
-    Parameters
-    ----------
-    filename : string
-        the name of the file to which the data is saved. A '.ply' extension will be appended to the
-        file name if it does no already have one.
+    Args:
+        filename (str): the name of the file to which the data is saved. A '.ply' extension will be appended to the
+            file name if it does no already have one.
 
-    field_list : list, tuple, numpy array
-        the fields to be saved in the ply file. Either a numpy array, a list of numpy arrays or a
-        tuple of numpy arrays. Each 1D numpy array and each column of 2D numpy arrays are considered
-        as one field.
+        field_list ([list, tuple, np.ndarray]): the fields to be saved in the ply file. Either a numpy array, a list of
+            numpy arrays or a tuple of numpy arrays. Each 1D numpy array and each column of 2D numpy arrays are
+            considered.
 
-    field_names : list
-        the name of each fields as a list of strings. Has to be the same length as the number of
-        fields.
+        field_names (list[str]): the name of each field. Has to be the same length as field_list.
 
-    Examples
-    --------
-    >>> points = np.random.rand(10, 3)
-    >>> write_ply('example1.ply', points, ['x', 'y', 'z'])
+    Examples:
+        >>> points = np.random.rand(10, 3)
+        >>> write_ply('example1.ply', points, ['x', 'y', 'z'])
 
-    >>> values = np.random.randint(2, size=10)
-    >>> write_ply('example2.ply', [points, values], ['x', 'y', 'z', 'values'])
+        >>> values = np.random.randint(2, size=10)
+        >>> write_ply('example2.ply', [points, values], ['x', 'y', 'z', 'values'])
 
-    >>> colors = np.random.randint(255, size=(10,3), dtype=np.uint8)
-    >>> field_names = ['x', 'y', 'z', 'red', 'green', 'blue', values']
-    >>> write_ply('example3.ply', [points, colors, values], field_names)
-
+        >>> colors = np.random.randint(255, size=(10,3), dtype=np.uint8)
+        >>> field_names = ['x', 'y', 'z', 'red', 'green', 'blue', 'values']
+        >>> write_ply('example3.ply', [points, colors, values], field_names)
     """
 
     # Format list input to the right form
@@ -199,19 +182,16 @@ def write_ply(filename, field_list, field_names):
     # open in text mode to write the header
     with open(filename, "w") as plyfile:
 
-        # First magical word
-        header = ["ply"]
+        # first magical word and encoding format
+        header = ["ply", "format binary_" + sys.byteorder + "_endian 1.0"]
 
-        # Encoding format
-        header.append("format binary_" + sys.byteorder + "_endian 1.0")
-
-        # Points properties description
+        # points properties description
         header.extend(header_properties(field_list, field_names))
 
-        # End of header
+        # end of header
         header.append("end_header")
 
-        # Write all lines
+        # write all lines
         for line in header:
             plyfile.write("%s\n" % line)
 
@@ -238,16 +218,15 @@ def write_ply(filename, field_list, field_names):
 
 
 def describe_element(name, df):
-    """Takes the columns of the dataframe and builds a ply-like description
+    """
+    Takes the columns of the dataframe and builds a ply-like description
 
-    Parameters
-    ----------
-    name: str
-    df: pandas DataFrame
+    Args:
+        name (str)
+        df (pandas.DataFrame)
 
-    Returns
-    -------
-    element: list[str]
+    Returns:
+        element (List[str])
     """
     property_formats = {"f": "float", "u": "uchar", "i": "int"}
     element = ["element " + name + " " + str(len(df))]

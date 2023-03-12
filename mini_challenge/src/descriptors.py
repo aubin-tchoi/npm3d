@@ -1,17 +1,14 @@
 """
 Implementation of local PCA on point clouds for normals computations and feature extraction (PCA-based descriptors).
 """
-import argparse
 from typing import Optional, Tuple, List
 
 import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.neighbors import KDTree
 
-from .ply import write_ply, read_ply
 
-
-def PCA(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def pca(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Computes the eigenvalues and eigenvectors of the covariance matrix of a point cloud.
     """
@@ -36,7 +33,7 @@ def PCA(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     )
 
 
-def compute_local_PCA(
+def compute_local_pca(
     query_points: np.ndarray,
     cloud_points: np.ndarray,
     nghbrd_search: str = "spherical",
@@ -82,7 +79,7 @@ def compute_local_PCA(
     moments = np.zeros((query_points.shape[0], 8))
 
     for i, point in enumerate(query_points):
-        all_eigenvalues[i], all_eigenvectors[i], moments[i] = PCA(
+        all_eigenvalues[i], all_eigenvectors[i], moments[i] = pca(
             cloud_points[neighborhoods[i]]
         )
 
@@ -95,7 +92,7 @@ def compute_basic_features(
     """
     Computes PCA-based descriptors on a point cloud.
     """
-    all_eigenvalues, all_eigenvectors, _, __ = compute_local_PCA(
+    all_eigenvalues, all_eigenvectors, _, __ = compute_local_pca(
         query_points, cloud_points, radius=radius
     )
     lbd3, lbd2, lbd1 = (
@@ -119,7 +116,7 @@ def compute_features(query_points: np.ndarray, cloud_points: np.ndarray, radius:
     """
     Computes PCA-based descriptors on a point cloud.
     """
-    all_eigenvalues, all_eigenvectors, moments, neighborhood_sizes = compute_local_PCA(
+    all_eigenvalues, all_eigenvectors, moments, neighborhood_sizes = compute_local_pca(
         query_points, cloud_points, radius=radius
     )
     lbd3, lbd2, lbd1 = (
@@ -165,79 +162,3 @@ def compute_features(query_points: np.ndarray, cloud_points: np.ndarray, radius:
             np.array(neighborhood_sizes)[:, None],
         )
     )
-
-
-def parse_args() -> argparse.Namespace:
-    """
-    Parses the command line arguments. Also produces the help message.
-    """
-    parser = argparse.ArgumentParser(description="Launches runs of PCA computation")
-
-    parser.add_argument(
-        "--radius",
-        type=float,
-        default=0.5,
-        help="Radius of the spherical search",
-    )
-    parser.add_argument(
-        "--k", type=int, default=30, help="Number of neighbors in the KNN search"
-    )
-    parser.add_argument(
-        "--skip_pca_check",
-        action="store_false",
-        help="Skip the check on PCA computation",
-    )
-    parser.add_argument(
-        "--skip_normals",
-        action="store_false",
-        help="Skip normals computation",
-    )
-    parser.add_argument(
-        "--skip_descriptors",
-        action="store_false",
-        help="Skip descriptors computation",
-    )
-
-    return parser.parse_args()
-
-
-if __name__ == "__main__":
-    args = parse_args()
-
-    # loading the cloud as a [N x 3] matrix
-    cloud_path = "../data/Lille_street_small.ply"
-    cloud_ply = read_ply(cloud_path)
-    cloud = np.vstack((cloud_ply["x"], cloud_ply["y"], cloud_ply["z"])).T
-
-    if not args.skip_pca_check:
-        eigenvalues, eigenvectors, _ = PCA(cloud)
-        assert np.allclose(eigenvalues, [5.25050177, 21.7893201, 89.58924003])
-
-    if not args.skip_normals:
-        # spherical neighborhoods
-        sph_normals = compute_local_PCA(cloud, cloud, radius=0.5)[1][:, :, 0]
-        write_ply(
-            "../Lille_street_small_normals.ply",
-            (cloud, sph_normals),
-            ["x", "y", "z", "nx", "ny", "nz"],
-        )
-
-        # knn neighborhoods
-        knn_normals = compute_local_PCA(cloud, cloud, nghbrd_search="knn", k=30)[1][
-            :, :, 0
-        ]
-        write_ply(
-            "../Lille_street_small_normals_knn.ply",
-            (cloud, knn_normals),
-            ["x", "y", "z", "nx", "ny", "nz"],
-        )
-
-    if not args.skip_descriptors:
-        verticality, linearity, planarity, sphericity = compute_basic_features(
-            cloud, cloud, 0.5
-        )
-        write_ply(
-            "../Lille_street_small_normals_feats.ply",
-            [cloud, verticality, linearity, planarity, sphericity],
-            ["x", "y", "z", "verticality", "linearity", "planarity", "sphericity"],
-        )
